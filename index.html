@@ -13,16 +13,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-siz
 .logo{font-size:15px;font-weight:600;color:#1a1a1a;letter-spacing:-.02em}
 .logo span{color:#0066ff}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.up-btn{border:0.5px solid #c8c7c0;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;background:#fff;color:#1a1a1a;display:flex;align-items:center;gap:6px;transition:background .12s}
+.up-btn:hover{background:#f5f5f3}
 .period-chip{font-size:11px;color:#1a1a1a;background:#f5f5f3;padding:4px 10px;border-radius:20px;font-weight:500;border:0.5px solid #e0dfd8}
 .updated-chip{font-size:11px;color:#1D9E75;background:#d0f0e430;padding:4px 10px;border-radius:20px;border:0.5px solid #1D9E7530}
-.loading-chip{font-size:11px;color:#888780;background:#f5f5f3;padding:4px 10px;border-radius:20px;border:0.5px solid #e0dfd8;display:flex;align-items:center;gap:5px}
-.spinner{width:10px;height:10px;border:1.5px solid #e0dfd8;border-top-color:#888780;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
-@keyframes spin{to{transform:rotate(360deg)}}
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;color:#888780}
 .empty-icon{font-size:48px;opacity:.4}
 .empty-title{font-size:18px;font-weight:600;color:#5f5e5a}
-.empty-sub{font-size:13px;color:#888780;text-align:center;max-width:380px;line-height:1.6}
-.empty-sub code{background:#f0efe8;padding:2px 5px;border-radius:4px;font-size:11px;color:#444}
+.empty-sub{font-size:13px;color:#888780;text-align:center;max-width:360px;line-height:1.5}
+.empty-btn{border:0.5px solid transparent;border-radius:10px;padding:10px 20px;font-size:13px;cursor:pointer;background:#1a1a1a;color:#fff;margin-top:8px}
 .wrap{max-width:1100px;margin:0 auto;padding:24px}
 .tab-bar{display:flex;gap:0;margin-bottom:20px;border-bottom:0.5px solid #e0dfd8}
 .tab{padding:9px 18px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;color:#888780;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;letter-spacing:.01em}
@@ -55,6 +54,10 @@ th{text-align:left;font-weight:600;font-size:10px;color:#888780;padding:6px 10px
 td{padding:8px 10px;border-bottom:0.5px solid #f0efe8;color:#1a1a1a}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#fafaf8}
+.ad-row td{background:#fafaf8;border-bottom:0.5px solid #f5f5f3}
+.ad-row:last-child td{border-bottom:none}
+.expand-icon{display:inline-block;width:14px;font-size:9px;color:#bbb;transition:transform .15s;flex-shrink:0}
+.expand-icon.open{transform:rotate(90deg)}
 .badge{display:inline-block;font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600;letter-spacing:.02em}
 .b-uki{background:#dceefb;color:#0C447C}
 .b-dach{background:#d0f0e4;color:#085041}
@@ -77,21 +80,20 @@ select{outline:none}
 <div class="topbar">
   <div class="logo">Brevo <span>·</span> LinkedIn Campaigns</div>
   <div class="topbar-right">
-    <span class="period-chip" id="period-chip">Loading…</span>
+    <span class="period-chip" id="period-chip">No data</span>
     <span class="updated-chip" id="updated-chip" style="display:none"></span>
-    <span class="loading-chip" id="loading-chip" style="display:none"><span class="spinner"></span>Fetching data…</span>
+    <button class="up-btn" onclick="document.getElementById('csv-file').click()">↑ Load LinkedIn CSV</button>
+    <input type="file" id="csv-file" accept=".csv" style="display:none" onchange="handleCSV(event)">
   </div>
 </div>
 
 <div class="wrap" id="main-wrap">
 
   <div id="empty-state" class="empty-state" style="display:none">
-    <div class="empty-icon">📂</div>
-    <div class="empty-title">No data file found</div>
-    <div class="empty-sub">
-      This dashboard expects a file called <code>data.csv</code> in the same folder as this page.<br><br>
-      To update: replace <code>data.csv</code> with the latest LinkedIn Ad Set Performance export, then commit and push to GitHub.
-    </div>
+    <div class="empty-icon">📊</div>
+    <div class="empty-title">No campaign data yet</div>
+    <div class="empty-sub">Upload your LinkedIn Ad Set Performance CSV export to populate the dashboard. Once loaded, it persists here — just reload each Monday with the new export.</div>
+    <button class="empty-btn" onclick="document.getElementById('csv-file').click()">↑ Load LinkedIn CSV export</button>
   </div>
 
   <div id="dashboard" style="display:none">
@@ -103,6 +105,7 @@ select{outline:none}
       <button class="tab" onclick="switchTab('traffic',this)">Traffic</button>
     </div>
 
+    <!-- Filter row 1: Market + Owner -->
     <div class="filters">
       <span class="fl">Market</span>
       <button class="pill active" onclick="setFilter('market','all',this)">All</button>
@@ -124,6 +127,7 @@ select{outline:none}
       <button class="pill"        id="period-custom" onclick="setPeriod('custom',this)">Custom…</button>
     </div>
 
+    <!-- Custom date row (shown only when Custom is active) -->
     <div class="custom-dates" id="custom-date-row" style="display:none">
       <span class="fl">From</span>
       <input type="date" id="date-start" class="date-input" onchange="updateCustomDates()">
@@ -140,37 +144,35 @@ select{outline:none}
 </div>
 
 <script>
+// ─── Palette & labels ────────────────────────────────────────────────────────
 const MKTCOLORS={uki:'#378ADD',dach:'#1D9E75',us:'#EF9F27',nordics:'#D4537E',other:'#888780'};
 const OBJCOLORS={awareness:'#7F77DD',engagement:'#378ADD',leadgen:'#1D9E75',traffic:'#EF9F27'};
 const OBJ_LABELS={awareness:'Awareness',engagement:'Engagement',leadgen:'Lead Gen',traffic:'Traffic'};
 const AD_PALETTE=['#378ADD','#1D9E75','#EF9F27','#D4537E','#7F77DD','#5DCAA5','#185FA5','#0F6E56','#BA7517','#993556','#534AB7','#9FE1CB'];
-
+// ─── State ───────────────────────────────────────────────────────────────────
 let activeTab='overview';
 let filters={market:'all',owner:'all'};
 let periodState={preset:'week',customStart:null,customEnd:null};
 let allData=[];
 let chartReg={};
+let expandedRows={}; // tracks which ad-set rows are expanded: key → bool
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
 async function loadData(){
-  document.getElementById('loading-chip').style.display='flex';
   document.getElementById('period-chip').textContent='Loading…';
   try{
-    // Try fetching data.csv from same directory (GitHub Pages)
+    // Try UTF-8 first
     const res=await fetch('./data.csv');
     if(!res.ok)throw new Error('not found');
     const text=await res.text();
-    // Detect encoding: if it looks like UTF-16LE garbage, re-fetch as blob
     const parsed=parseLinkedInCSV(text);
-    if(parsed.length===0)throw new Error('empty');
+    if(parsed.length===0)throw new Error('empty or wrong encoding');
     allData=parsed;
-    // Try to get last-modified from response headers
     const lm=res.headers.get('last-modified');
     showUpdatedChip(lm?new Date(lm).toISOString():null);
-    showDashboard();
-    renderCurrentTab();
+    showDashboard();renderCurrentTab();
   }catch(e){
-    // Try fetching as blob for UTF-16LE
+    // Retry as UTF-16LE blob
     try{
       const res2=await fetch('./data.csv');
       if(!res2.ok)throw new Error('not found');
@@ -178,16 +180,11 @@ async function loadData(){
       const text16=new TextDecoder('utf-16le').decode(buf);
       const parsed=parseLinkedInCSV(text16);
       if(parsed.length===0)throw new Error('empty');
-      allData=parsed;
-      showUpdatedChip(null);
-      showDashboard();
-      renderCurrentTab();
+      allData=parsed;showUpdatedChip(null);showDashboard();renderCurrentTab();
     }catch(e2){
       document.getElementById('empty-state').style.display='flex';
       document.getElementById('period-chip').textContent='No data';
     }
-  }finally{
-    document.getElementById('loading-chip').style.display='none';
   }
 }
 
@@ -201,35 +198,47 @@ function showUpdatedChip(isoTs){
 // ─── Date range logic ─────────────────────────────────────────────────────────
 function getEffectiveDateRange(){
   if(!allData.length)return{start:null,end:null,prevStart:null,prevEnd:null,deltaLabel:''};
-  const sorted=allData.map(r=>r.date).sort();
-  const earliest=sorted[0],latestDate=sorted[sorted.length-1];
+  const sorted=[...allData].map(r=>r.date).sort();
+  const earliest=sorted[0];
+  const latestDate=sorted[sorted.length-1];
   const latest=new Date(latestDate+'T00:00:00');
+
   const p=periodState.preset;
+
   if(p==='week'){
     const monStr=getWeekMon(latestDate);
     const mon=new Date(monStr+'T00:00:00');
     const sun=new Date(mon.getTime()+6*86400000);
     const prevMon=new Date(mon.getTime()-7*86400000);
     const prevSun=new Date(mon.getTime()-86400000);
-    return{start:monStr,end:sun.toISOString().slice(0,10),prevStart:prevMon.toISOString().slice(0,10),prevEnd:prevSun.toISOString().slice(0,10),deltaLabel:'WoW Δ'};
+    return{start:monStr,end:sun.toISOString().slice(0,10),
+           prevStart:prevMon.toISOString().slice(0,10),prevEnd:prevSun.toISOString().slice(0,10),
+           deltaLabel:'WoW Δ'};
   }
   if(p==='month'){
     const y=latest.getFullYear(),m=latest.getMonth();
     const start=`${y}-${String(m+1).padStart(2,'0')}-01`;
-    const prevEnd=new Date(y,m,0);
-    const prevStart=new Date(y,m-1,1);
-    return{start,end:latestDate,prevStart:prevStart.toISOString().slice(0,10),prevEnd:prevEnd.toISOString().slice(0,10),deltaLabel:'MoM Δ'};
+    const prevMonthEnd=new Date(y,m,0);
+    const prevMonthStart=new Date(y,m-1,1);
+    return{start,end:latestDate,
+           prevStart:prevMonthStart.toISOString().slice(0,10),prevEnd:prevMonthEnd.toISOString().slice(0,10),
+           deltaLabel:'MoM Δ'};
   }
   if(p==='3m'){
-    const s=new Date(latest);s.setMonth(s.getMonth()-3);
-    const startStr=s.toISOString().slice(0,10);
-    const ps=new Date(s);ps.setMonth(ps.getMonth()-3);
-    const pe=new Date(s.getTime()-86400000);
-    return{start:startStr,end:latestDate,prevStart:ps.toISOString().slice(0,10),prevEnd:pe.toISOString().slice(0,10),deltaLabel:'vs prev 3M'};
+    const s3=new Date(latest);s3.setMonth(s3.getMonth()-3);
+    const startStr=s3.toISOString().slice(0,10);
+    const ps=new Date(s3);ps.setMonth(ps.getMonth()-3);
+    const pe=new Date(s3.getTime()-86400000);
+    return{start:startStr,end:latestDate,
+           prevStart:ps.toISOString().slice(0,10),prevEnd:pe.toISOString().slice(0,10),
+           deltaLabel:'vs prev 3M'};
   }
-  if(p==='all')return{start:earliest,end:latestDate,prevStart:null,prevEnd:null,deltaLabel:''};
+  if(p==='all'){
+    return{start:earliest,end:latestDate,prevStart:null,prevEnd:null,deltaLabel:''};
+  }
   if(p==='custom'){
-    const start=periodState.customStart||earliest,end=periodState.customEnd||latestDate;
+    const start=periodState.customStart||earliest;
+    const end=periodState.customEnd||latestDate;
     const dur=new Date(end+'T00:00:00')-new Date(start+'T00:00:00');
     const pe=new Date(new Date(start+'T00:00:00').getTime()-86400000).toISOString().slice(0,10);
     const ps=new Date(new Date(start+'T00:00:00').getTime()-dur-86400000).toISOString().slice(0,10);
@@ -242,8 +251,15 @@ function getPeriodChipLabel(dr){
   const p=periodState.preset;
   if(!dr.start)return'No data';
   if(p==='week')return'Week of '+dr.start;
-  if(p==='month'){const d=new Date(dr.start+'T00:00:00');return d.toLocaleString('en-GB',{month:'long',year:'numeric'});}
-  if(p==='3m'){const s=new Date(dr.start+'T00:00:00'),e=new Date(dr.end+'T00:00:00');return s.toLocaleString('en-GB',{month:'short'})+' – '+e.toLocaleString('en-GB',{month:'short',year:'numeric'});}
+  if(p==='month'){
+    const d=new Date(dr.start+'T00:00:00');
+    return d.toLocaleString('en-GB',{month:'long',year:'numeric'});
+  }
+  if(p==='3m'){
+    const s=new Date(dr.start+'T00:00:00');
+    const e=new Date(dr.end+'T00:00:00');
+    return s.toLocaleString('en-GB',{month:'short'})+' – '+e.toLocaleString('en-GB',{month:'short',year:'numeric'});
+  }
   if(p==='all')return'All time';
   if(p==='custom')return(dr.start||'?')+' → '+(dr.end||'?');
   return dr.start;
@@ -257,6 +273,7 @@ function applyMarketOwner(data){
     return true;
   });
 }
+
 function applyFilters(data){
   const dr=getEffectiveDateRange();
   return applyMarketOwner(data).filter(r=>{
@@ -265,200 +282,474 @@ function applyFilters(data){
     return true;
   });
 }
-function scopeData(obj){return applyFilters(obj?allData.filter(r=>r.objective===obj):allData);}
+
+function scopeData(obj){
+  let d=obj?allData.filter(r=>r.objective===obj):allData;
+  return applyFilters(d);
+}
+
+// Data for the previous equivalent period (market/owner filtered but date shifted)
 function getPrevData(obj){
   const dr=getEffectiveDateRange();
   if(!dr.prevStart||!dr.prevEnd)return null;
   let d=obj?allData.filter(r=>r.objective===obj):allData;
-  return applyMarketOwner(d).filter(r=>r.date>=dr.prevStart&&r.date<=dr.prevEnd);
+  d=applyMarketOwner(d);
+  return d.filter(r=>r.date>=dr.prevStart&&r.date<=dr.prevEnd);
 }
 
-// ─── Aggregation ──────────────────────────────────────────────────────────────
+// ─── Aggregation helpers ──────────────────────────────────────────────────────
 function sumAll(data,m){return data.reduce((s,r)=>s+(r[m]||0),0);}
 function avgAll(data,m){if(!data.length)return 0;return data.reduce((s,r)=>s+(r[m]||0),0)/data.length;}
+
+// Weekly helpers (for charts only)
 function getWeekMon(d){const dt=new Date(d+'T00:00:00');const day=dt.getDay();const mon=new Date(dt);mon.setDate(dt.getDate()-((day+6)%7));return mon.toISOString().slice(0,10);}
 function getWeeks(data){return[...new Set(data.map(r=>getWeekMon(r.date)))].sort();}
 function sumWk(data,wk,m){return data.filter(r=>getWeekMon(r.date)===wk).reduce((s,r)=>s+(r[m]||0),0);}
 function avgWk(data,wk,m){const rows=data.filter(r=>getWeekMon(r.date)===wk);if(!rows.length)return 0;return rows.reduce((s,r)=>s+(r[m]||0),0)/rows.length;}
+
 function wowD(c,p){if(p===null||p===undefined||p===0)return null;return(c-p)/Math.abs(p)*100;}
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
-function fmtD(d,inv){if(d===null)return'<span class="dneu">—</span>';const pos=inv?d<-1:d>1;const neg=inv?d>1:d<-1;const cls=pos?'dpos':neg?'dneg':'dneu';const sign=d>0?'+':'';return`<span class="${cls}">${sign}${d.toFixed(1)}%</span>`;}
-function fmtDT(d,inv){if(d===null)return'<span class="wow-neu">—</span>';const pos=inv?d<-1:d>1;const neg=inv?d>1:d<-1;const cls=pos?'wow-up':neg?'wow-dn':'wow-neu';const sign=d>0?'+':'';return`<span class="${cls}">${sign}${d.toFixed(1)}%</span>`;}
+function fmtD(d,inv){
+  if(d===null)return'<span class="dneu">—</span>';
+  const pos=inv?d<-1:d>1;const neg=inv?d>1:d<-1;
+  const cls=pos?'dpos':neg?'dneg':'dneu';const sign=d>0?'+':'';
+  return`<span class="${cls}">${sign}${d.toFixed(1)}%</span>`;
+}
+function fmtDT(d,inv){
+  if(d===null)return'<span class="wow-neu">—</span>';
+  const pos=inv?d<-1:d>1;const neg=inv?d>1:d<-1;
+  const cls=pos?'wow-up':neg?'wow-dn':'wow-neu';const sign=d>0?'+':'';
+  return`<span class="${cls}">${sign}${d.toFixed(1)}%</span>`;
+}
 function mktB(m){const cls={uki:'b-uki',dach:'b-dach',us:'b-us',nordics:'b-nordics'}[m]||'b-bull';return`<span class="badge ${cls}">${m.toUpperCase()}</span>`;}
 function ownerB(o){return`<span class="badge ${o==='growth'?'b-growth':'b-bull'}">${o==='growth'?'Growth':'Bulldozer'}</span>`;}
 function shortAS(s){return s.replace('[Bulldozer] ','').replace('[Growth PPC] ','').replace('Engagement - ','').replace(' - Engagement','').replace('ABM ','').replace('TOF - ','').replace('MOF - ','');}
+
 function kpiCard(label,val,d,fmt,inv){
   let fv='—';
-  if(val!==null&&val!==undefined){if(fmt==='eur')fv='€'+Math.round(val).toLocaleString();else if(fmt==='pct')fv=val.toFixed(2)+'%';else if(fmt==='eur1')fv='€'+val.toFixed(1);else if(fmt==='eur2')fv='€'+val.toFixed(2);else fv=Math.round(val).toLocaleString();}
+  if(val!==null&&val!==undefined){
+    if(fmt==='eur')fv='€'+Math.round(val).toLocaleString();
+    else if(fmt==='pct')fv=val.toFixed(2)+'%';
+    else if(fmt==='eur1')fv='€'+val.toFixed(1);
+    else if(fmt==='eur2')fv='€'+val.toFixed(2);
+    else fv=Math.round(val).toLocaleString();
+  }
   const dr=getEffectiveDateRange();
   const dLabel=dr.deltaLabel?`<span style="font-size:9px;color:#aaa;margin-left:3px">${dr.deltaLabel}</span>`:'';
   return`<div class="kpi"><div class="kpi-label">${label}</div><div class="kpi-value">${fv}</div><div class="kpi-delta">${fmtD(d,inv||false)}${d!==null?dLabel:''}</div></div>`;
 }
-function mkChart(id,cfg){if(chartReg[id]){chartReg[id].destroy();delete chartReg[id];}const el=document.getElementById(id);if(!el)return;chartReg[id]=new Chart(el,cfg);}
+
+// ─── Chart helper ─────────────────────────────────────────────────────────────
+function mkChart(id,cfg){
+  if(chartReg[id]){chartReg[id].destroy();delete chartReg[id];}
+  const el=document.getElementById(id);if(!el)return;
+  chartReg[id]=new Chart(el,cfg);
+}
 
 // ─── OVERVIEW ─────────────────────────────────────────────────────────────────
 function renderOverview(){
-  const data=scopeData(null),prevData=getPrevData(null),dr=getEffectiveDateRange();
-  const weeks=getWeeks(data),wL=weeks.map(w=>w.slice(5));
+  const data=scopeData(null);
+  const prevData=getPrevData(null);
+  const dr=getEffectiveDateRange();
+  const weeks=getWeeks(data);
+  const wL=weeks.map(w=>w.slice(5));
   document.getElementById('period-chip').textContent=getPeriodChipLabel(dr);
+
   const spend=sumAll(data,'spend'),spendP=prevData?sumAll(prevData,'spend'):null;
   const imp=sumAll(data,'impressions'),impP=prevData?sumAll(prevData,'impressions'):null;
   const eng=sumAll(data,'engagements'),engP=prevData?sumAll(prevData,'engagements'):null;
   const leads=sumAll(data,'leads'),leadsP=prevData?sumAll(prevData,'leads'):null;
-  const objs=['awareness','engagement','leadgen','traffic'],mkts=['uki','dach','us','nordics'];
+
+  const objs=['awareness','engagement','leadgen','traffic'];
+  const mkts=['uki','dach','us','nordics'];
+
   document.getElementById('tab-overview').innerHTML=`
-  <div class="kpi-grid">${kpiCard('Total spend',spend,wowD(spend,spendP),'eur')}${kpiCard('Impressions',imp,wowD(imp,impP))}${kpiCard('Engagements',eng,wowD(eng,engP))}${kpiCard('Leads',leads,wowD(leads,leadsP))}</div>
-  <div class="two-col">
-    <div class="card no-mb"><div class="ct">Weekly spend by objective (€)</div><div class="leg">${objs.map(o=>`<span class="li"><span class="ld" style="background:${OBJCOLORS[o]}"></span>${OBJ_LABELS[o]}</span>`).join('')}</div><div style="position:relative;height:190px"><canvas id="ov-obj"></canvas></div></div>
-    <div class="card no-mb"><div class="ct">Weekly spend by market (€)</div><div class="leg">${mkts.map(m=>`<span class="li"><span class="ld" style="background:${MKTCOLORS[m]}"></span>${m.toUpperCase()}</span>`).join('')}</div><div style="position:relative;height:190px"><canvas id="ov-mkt"></canvas></div></div>
+  <div class="kpi-grid">
+    ${kpiCard('Total spend',spend,wowD(spend,spendP),'eur')}
+    ${kpiCard('Impressions',imp,wowD(imp,impP))}
+    ${kpiCard('Engagements',eng,wowD(eng,engP))}
+    ${kpiCard('Leads',leads,wowD(leads,leadsP))}
   </div>
-  <div class="card"><div class="ct">Period spend — Growth PPC vs Bulldozer</div><div style="position:relative;height:80px"><canvas id="ov-own"></canvas></div></div>
+  <div class="two-col">
+    <div class="card no-mb">
+      <div class="ct">Weekly spend by objective (€)</div>
+      <div class="leg">${objs.map(o=>`<span class="li"><span class="ld" style="background:${OBJCOLORS[o]}"></span>${OBJ_LABELS[o]}</span>`).join('')}</div>
+      <div style="position:relative;height:190px"><canvas id="ov-obj"></canvas></div>
+    </div>
+    <div class="card no-mb">
+      <div class="ct">Weekly spend by market (€)</div>
+      <div class="leg">${mkts.map(m=>`<span class="li"><span class="ld" style="background:${MKTCOLORS[m]}"></span>${m.toUpperCase()}</span>`).join('')}</div>
+      <div style="position:relative;height:190px"><canvas id="ov-mkt"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Period spend — Growth PPC vs Bulldozer</div>
+    <div style="position:relative;height:80px"><canvas id="ov-own"></canvas></div>
+  </div>
   <div class="sec-div">Campaign period summary</div>
-  <table><thead><tr><th>Campaign</th><th>Objective</th><th>Owner</th><th>Market</th><th style="text-align:right">Period spend</th><th style="text-align:right">Δ</th><th style="text-align:right">Impressions</th><th style="text-align:right">Δ</th></tr></thead><tbody id="ov-tbl"></tbody></table>`;
-  mkChart('ov-obj',{type:'bar',data:{labels:wL,datasets:objs.map(o=>{const od=applyFilters(allData.filter(r=>r.objective===o));return{label:OBJ_LABELS[o],data:weeks.map(w=>Math.round(sumWk(od,w,'spend'))),backgroundColor:OBJCOLORS[o],borderRadius:2,borderSkipped:false};})},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10},callback:v=>'€'+v}}}}});
-  mkChart('ov-mkt',{type:'bar',data:{labels:wL,datasets:mkts.map(m=>{const md=applyFilters(allData.filter(r=>r.market===m));return{label:m.toUpperCase(),data:weeks.map(w=>Math.round(sumWk(md,w,'spend'))),backgroundColor:MKTCOLORS[m],borderRadius:2,borderSkipped:false};})},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10},callback:v=>'€'+v}}}}});
-  const gS=Math.round(sumAll(data.filter(r=>r.owner==='growth'),'spend')),bS=Math.round(sumAll(data.filter(r=>r.owner==='bulldozer'),'spend'));
-  mkChart('ov-own',{type:'bar',data:{labels:[''],datasets:[{label:'Growth PPC',data:[gS],backgroundColor:'#7F77DD',borderRadius:4,borderSkipped:false},{label:'Bulldozer',data:[bS],backgroundColor:'#888780',borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'€'+c.parsed.x.toLocaleString()}}},scales:{x:{stacked:true,ticks:{font:{size:10},callback:v=>'€'+v}},y:{stacked:true,ticks:{display:false}}}}});
+  <table><thead><tr>
+    <th>Campaign</th><th>Objective</th><th>Owner</th><th>Market</th>
+    <th style="text-align:right">Period spend</th><th style="text-align:right">Δ</th>
+    <th style="text-align:right">Impressions</th><th style="text-align:right">Δ</th>
+  </tr></thead><tbody id="ov-tbl"></tbody></table>`;
+
+  // Spend by objective chart
+  mkChart('ov-obj',{type:'bar',data:{labels:wL,datasets:objs.map(o=>{
+    const od=applyFilters(allData.filter(r=>r.objective===o));
+    return{label:OBJ_LABELS[o],data:weeks.map(w=>Math.round(sumWk(od,w,'spend'))),backgroundColor:OBJCOLORS[o],borderRadius:2,borderSkipped:false};
+  })},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10},callback:v=>'€'+v}}}}});
+
+  // Spend by market chart
+  mkChart('ov-mkt',{type:'bar',data:{labels:wL,datasets:mkts.map(m=>{
+    const md=applyFilters(allData.filter(r=>r.market===m));
+    return{label:m.toUpperCase(),data:weeks.map(w=>Math.round(sumWk(md,w,'spend'))),backgroundColor:MKTCOLORS[m],borderRadius:2,borderSkipped:false};
+  })},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10},callback:v=>'€'+v}}}}});
+
+  // Growth vs Bulldozer (for selected period)
+  const gS=Math.round(sumAll(data.filter(r=>r.owner==='growth'),'spend'));
+  const bS=Math.round(sumAll(data.filter(r=>r.owner==='bulldozer'),'spend'));
+  mkChart('ov-own',{type:'bar',data:{labels:[''],datasets:[
+    {label:'Growth PPC',data:[gS],backgroundColor:'#7F77DD',borderRadius:4,borderSkipped:false},
+    {label:'Bulldozer',data:[bS],backgroundColor:'#888780',borderRadius:4,borderSkipped:false}
+  ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'€'+c.parsed.x.toLocaleString()}}},scales:{x:{stacked:true,ticks:{font:{size:10},callback:v=>'€'+v}},y:{stacked:true,ticks:{display:false}}}}});
+
+  // Campaign table (period totals)
   const cams=[...new Map(data.map(r=>[r.campaignName,{name:r.campaignName,objective:r.objective,owner:r.owner,market:r.market}])).values()];
   document.getElementById('ov-tbl').innerHTML=cams.map(c=>{
-    const cd=data.filter(r=>r.campaignName===c.name),pcd=prevData?prevData.filter(r=>r.campaignName===c.name):null;
-    const s=sumAll(cd,'spend'),sp=pcd?sumAll(pcd,'spend'):null,i=sumAll(cd,'impressions'),ip=pcd?sumAll(pcd,'impressions'):null;
-    const sn=c.name.replace('[Bulldozer] ','').replace('[Growth PPC] ','');
-    return`<tr><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sn}</td><td><span class="badge" style="background:${OBJCOLORS[c.objective]}20;color:${OBJCOLORS[c.objective]}">${OBJ_LABELS[c.objective]}</span></td><td>${ownerB(c.owner)}</td><td>${mktB(c.market)}</td><td style="text-align:right;font-weight:600">€${Math.round(s).toLocaleString()}</td><td style="text-align:right">${fmtDT(wowD(s,sp))}</td><td style="text-align:right">${Math.round(i).toLocaleString()}</td><td style="text-align:right">${fmtDT(wowD(i,ip))}</td></tr>`;
+    const cd=data.filter(r=>r.campaignName===c.name);
+    const pcd=prevData?prevData.filter(r=>r.campaignName===c.name):null;
+    const s=sumAll(cd,'spend'),sp=pcd?sumAll(pcd,'spend'):null;
+    const i=sumAll(cd,'impressions'),ip=pcd?sumAll(pcd,'impressions'):null;
+    const shortName=c.name.replace('[Bulldozer] ','').replace('[Growth PPC] ','');
+    return`<tr>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${shortName}</td>
+      <td><span class="badge" style="background:${OBJCOLORS[c.objective]}20;color:${OBJCOLORS[c.objective]}">${OBJ_LABELS[c.objective]}</span></td>
+      <td>${ownerB(c.owner)}</td><td>${mktB(c.market)}</td>
+      <td style="text-align:right;font-weight:600">€${Math.round(s).toLocaleString()}</td>
+      <td style="text-align:right">${fmtDT(wowD(s,sp))}</td>
+      <td style="text-align:right">${Math.round(i).toLocaleString()}</td>
+      <td style="text-align:right">${fmtDT(wowD(i,ip))}</td>
+    </tr>`;
   }).join('');
 }
 
 // ─── AWARENESS ────────────────────────────────────────────────────────────────
 function renderAwareness(){
-  const data=scopeData('awareness'),prevData=getPrevData('awareness'),dr=getEffectiveDateRange();
-  const weeks=getWeeks(data),wL=weeks.map(w=>w.slice(5));
-  const adsets=[...new Set(data.map(r=>r.adSet))],AC=adsets.map((_,i)=>AD_PALETTE[i%AD_PALETTE.length]);
+  const data=scopeData('awareness');
+  const prevData=getPrevData('awareness');
+  const dr=getEffectiveDateRange();
+  const weeks=getWeeks(data);
+  const wL=weeks.map(w=>w.slice(5));
+  const adsets=[...new Set(data.map(r=>r.adSet))];
+  const AC=adsets.map((_,i)=>AD_PALETTE[i%AD_PALETTE.length]);
+
   const spend=sumAll(data,'spend'),spendP=prevData?sumAll(prevData,'spend'):null;
   const imp=sumAll(data,'impressions'),impP=prevData?sumAll(prevData,'impressions'):null;
   const cpm=avgAll(data,'cpm'),cpmP=prevData?avgAll(prevData,'cpm'):null;
   const vvr=avgAll(data,'videoViewRate'),vvrP=prevData?avgAll(prevData,'videoViewRate'):null;
   const vcr=avgAll(data,'videoCompletionRate'),vcrP=prevData?avgAll(prevData,'videoCompletionRate'):null;
+
   const curMetric=document.getElementById('aw-metric')?.value||'impressions';
+
   document.getElementById('tab-awareness').innerHTML=`
-  <div class="kpi-grid-5">${kpiCard('Spend',spend,wowD(spend,spendP),'eur')}${kpiCard('Impressions',imp,wowD(imp,impP))}${kpiCard('Avg CPM',cpm,wowD(cpm,cpmP),'eur2',true)}${kpiCard('Video view rate',vvr,wowD(vvr,vvrP),'pct')}${kpiCard('Video completion',vcr,wowD(vcr,vcrP),'pct')}</div>
-  <div class="two-col"><div class="card no-mb"><div class="ct">Weekly impressions by ad set</div><div class="leg" id="aw-li"></div><div style="position:relative;height:190px"><canvas id="aw-imp"></canvas></div></div><div class="card no-mb"><div class="ct">CPM trend (€)</div><div class="leg" id="aw-licpm"></div><div style="position:relative;height:190px"><canvas id="aw-cpm"></canvas></div></div></div>
+  <div class="kpi-grid-5">
+    ${kpiCard('Spend',spend,wowD(spend,spendP),'eur')}
+    ${kpiCard('Impressions',imp,wowD(imp,impP))}
+    ${kpiCard('Avg CPM',cpm,wowD(cpm,cpmP),'eur2',true)}
+    ${kpiCard('Video view rate',vvr,wowD(vvr,vvrP),'pct')}
+    ${kpiCard('Video completion',vcr,wowD(vcr,vcrP),'pct')}
+  </div>
+  <div class="two-col">
+    <div class="card no-mb"><div class="ct">Weekly impressions by ad set</div><div class="leg" id="aw-li"></div><div style="position:relative;height:190px"><canvas id="aw-imp"></canvas></div></div>
+    <div class="card no-mb"><div class="ct">CPM trend (€)</div><div class="leg" id="aw-licpm"></div><div style="position:relative;height:190px"><canvas id="aw-cpm"></canvas></div></div>
+  </div>
   <div class="card"><div class="ct">Video completion funnel — period total</div><div style="position:relative;height:120px"><canvas id="aw-vid"></canvas></div></div>
   <div class="sec-div">Ad set period breakdown</div>
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span class="fl">Metric</span><select class="metric-sel" id="aw-metric" onchange="renderAwareness()"><option value="impressions"${curMetric==='impressions'?' selected':''}>Impressions</option><option value="spend"${curMetric==='spend'?' selected':''}>Spend (€)</option><option value="cpm"${curMetric==='cpm'?' selected':''}>CPM (€)</option><option value="videoViewRate"${curMetric==='videoViewRate'?' selected':''}>Video view rate %</option><option value="videoCompletionRate"${curMetric==='videoCompletionRate'?' selected':''}>Video completion %</option></select></div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+    <span class="fl">Metric</span>
+    <select class="metric-sel" id="aw-metric" onchange="renderAwareness()">
+      <option value="impressions"${curMetric==='impressions'?' selected':''}>Impressions</option>
+      <option value="spend"${curMetric==='spend'?' selected':''}>Spend (€)</option>
+      <option value="cpm"${curMetric==='cpm'?' selected':''}>CPM (€)</option>
+      <option value="videoViewRate"${curMetric==='videoViewRate'?' selected':''}>Video view rate %</option>
+      <option value="videoCompletionRate"${curMetric==='videoCompletionRate'?' selected':''}>Video completion %</option>
+    </select>
+  </div>
   <table><thead><tr><th style="width:38%">Ad set</th><th>Market</th><th>Owner</th><th style="text-align:right">This period</th><th style="text-align:right">Prev period</th><th style="text-align:right">Δ</th></tr></thead><tbody id="aw-tbl"></tbody></table>`;
+
   document.getElementById('aw-li').innerHTML=adsets.map((a,i)=>`<span class="li"><span class="ld" style="background:${AC[i]}"></span>${shortAS(a).slice(0,30)}</span>`).join('');
   mkChart('aw-imp',{type:'bar',data:{labels:wL,datasets:adsets.map((a,i)=>({label:shortAS(a),data:weeks.map(w=>Math.round(sumWk(data.filter(r=>r.adSet===a),w,'impressions'))),backgroundColor:AC[i],borderRadius:2,borderSkipped:false}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10}}}}}});
   document.getElementById('aw-licpm').innerHTML=adsets.map((a,i)=>`<span class="li"><span class="ld" style="background:${AC[i]}"></span>${shortAS(a).slice(0,30)}</span>`).join('');
   mkChart('aw-cpm',{type:'line',data:{labels:wL,datasets:adsets.map((a,i)=>({label:shortAS(a),data:weeks.map(w=>{const rows=data.filter(r=>r.adSet===a&&getWeekMon(r.date)===w);return rows.length?parseFloat((rows.reduce((s,r)=>s+r.cpm,0)/rows.length).toFixed(2)):null;}),borderColor:AC[i],backgroundColor:'transparent',borderWidth:2,pointRadius:3,tension:.3,spanGaps:true}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:10},callback:v=>'€'+v}},x:{ticks:{font:{size:10}}}}}});
-  mkChart('aw-vid',{type:'bar',data:{labels:['25% view','50% view','75% view','Completion'],datasets:[{data:[sumAll(data,'videoViews25'),sumAll(data,'videoViews50'),sumAll(data,'videoViews75'),sumAll(data,'videoCompletions')],backgroundColor:['#7F77DD','#534AB7','#3C3489','#26215C'],borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
-  const sm=curMetric,isAvg=['cpm','videoViewRate','videoCompletionRate'].includes(sm),inv=['cpm'].includes(sm);
+  const v25=sumAll(data,'videoViews25'),v50=sumAll(data,'videoViews50'),v75=sumAll(data,'videoViews75'),vc=sumAll(data,'videoCompletions');
+  mkChart('aw-vid',{type:'bar',data:{labels:['25% view','50% view','75% view','Completion'],datasets:[{data:[v25,v50,v75,vc],backgroundColor:['#7F77DD','#534AB7','#3C3489','#26215C'],borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
+
+  const sm=curMetric;
+  const isAvg=['cpm','videoViewRate','videoCompletionRate'].includes(sm);
+  const inv=['cpm'].includes(sm);
   function gv(d){if(!d.length)return null;return isAvg?d.reduce((s,r)=>s+r[sm],0)/d.length:d.reduce((s,r)=>s+r[sm],0);}
   function fv(v){if(v===null)return'—';if(sm==='spend')return'€'+v.toFixed(0);if(sm==='cpm')return'€'+v.toFixed(2);if(['videoViewRate','videoCompletionRate'].includes(sm))return v.toFixed(2)+'%';return Math.round(v).toLocaleString();}
-  document.getElementById('aw-tbl').innerHTML=adsets.map(a=>{const ad=data.filter(r=>r.adSet===a),adP=prevData?prevData.filter(r=>r.adSet===a):null,mkt=ad[0]?.market||'',ow=ad[0]?.owner||'',c=gv(ad),pp=adP&&adP.length?gv(adP):null;return`<tr><td>${shortAS(a)}</td><td>${mktB(mkt)}</td><td>${ownerB(ow)}</td><td style="text-align:right;font-weight:600">${fv(c)}</td><td style="text-align:right;color:#888780">${fv(pp)}</td><td style="text-align:right">${fmtDT(wowD(c,pp),inv)}</td></tr>`;}).join('');
+  document.getElementById('aw-tbl').innerHTML=adsets.map((a,idx)=>{
+    const ad=data.filter(r=>r.adSet===a);const adP=prevData?prevData.filter(r=>r.adSet===a):null;
+    const mkt=ad[0]?.market||'';const ow=ad[0]?.owner||'';
+    const c=gv(ad);const pp=adP&&adP.length?gv(adP):null;
+    const key=`aw_${idx}`;const isExp=!!expandedRows[key];
+    const hls=[...new Set(ad.map(r=>r.adHeadline||r.adName).filter(Boolean))];
+    const hasAds=hls.length>0;
+    let html=`<tr onclick="toggleExpand('${key}')" style="${hasAds?'cursor:pointer':''}"><td><span class="expand-icon${isExp?' open':''}">${hasAds?'▶':''}</span> ${shortAS(a)}</td><td>${mktB(mkt)}</td><td>${ownerB(ow)}</td><td style="text-align:right;font-weight:600">${fv(c)}</td><td style="text-align:right;color:#888780">${fv(pp)}</td><td style="text-align:right">${fmtDT(wowD(c,pp),inv)}</td></tr>`;
+    if(isExp&&hasAds){hls.forEach(hl=>{const hd=ad.filter(r=>(r.adHeadline||r.adName)===hl);const hp=adP?adP.filter(r=>(r.adHeadline||r.adName)===hl):null;const hc=gv(hd);const hpv=hp&&hp.length?gv(hp):null;const sh=hl.length>55?hl.slice(0,52)+'…':hl;html+=`<tr class="ad-row"><td style="padding-left:28px;color:#5f5e5a;font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${hl.replace(/"/g,'&quot;')}">${sh}</td><td></td><td></td><td style="text-align:right">${fv(hc)}</td><td style="text-align:right;color:#aaa">${fv(hpv)}</td><td style="text-align:right">${fmtDT(wowD(hc,hpv),inv)}</td></tr>`;});}
+    return html;
+  }).join('');
 }
 
 // ─── ENGAGEMENT ───────────────────────────────────────────────────────────────
 function renderEngagement(){
-  const data=scopeData('engagement'),prevData=getPrevData('engagement');
-  const weeks=getWeeks(data),wL=weeks.map(w=>w.slice(5));
-  const adsets=[...new Set(data.map(r=>r.adSet))],AC=adsets.map((_,i)=>AD_PALETTE[i%AD_PALETTE.length]);
+  const data=scopeData('engagement');
+  const prevData=getPrevData('engagement');
+  const weeks=getWeeks(data);
+  const wL=weeks.map(w=>w.slice(5));
+  const adsets=[...new Set(data.map(r=>r.adSet))];
+  const AC=adsets.map((_,i)=>AD_PALETTE[i%AD_PALETTE.length]);
+
   const spend=sumAll(data,'spend'),spendP=prevData?sumAll(prevData,'spend'):null;
   const imp=sumAll(data,'impressions'),impP=prevData?sumAll(prevData,'impressions'):null;
   const eng=sumAll(data,'engagements'),engP=prevData?sumAll(prevData,'engagements'):null;
   const er=avgAll(data,'engagementRate'),erP=prevData?avgAll(prevData,'engagementRate'):null;
+
   const curMetric=document.getElementById('en-metric')?.value||'engagements';
+
   document.getElementById('tab-engagement').innerHTML=`
-  <div class="kpi-grid">${kpiCard('Spend',spend,wowD(spend,spendP),'eur')}${kpiCard('Impressions',imp,wowD(imp,impP))}${kpiCard('Engagements',eng,wowD(eng,engP))}${kpiCard('Avg eng. rate',er,wowD(er,erP),'pct')}</div>
-  <div class="two-col"><div class="card no-mb"><div class="ct">Weekly engagements by ad set</div><div class="leg" id="en-li"></div><div style="position:relative;height:200px"><canvas id="en-eng"></canvas></div></div><div class="card no-mb"><div class="ct">Engagement rate % — weekly trend</div><div class="leg" id="en-lier"></div><div style="position:relative;height:200px"><canvas id="en-er"></canvas></div></div></div>
+  <div class="kpi-grid">
+    ${kpiCard('Spend',spend,wowD(spend,spendP),'eur')}
+    ${kpiCard('Impressions',imp,wowD(imp,impP))}
+    ${kpiCard('Engagements',eng,wowD(eng,engP))}
+    ${kpiCard('Avg eng. rate',er,wowD(er,erP),'pct')}
+  </div>
+  <div class="two-col">
+    <div class="card no-mb"><div class="ct">Weekly engagements by ad set</div><div class="leg" id="en-li"></div><div style="position:relative;height:200px"><canvas id="en-eng"></canvas></div></div>
+    <div class="card no-mb"><div class="ct">Engagement rate % — weekly trend</div><div class="leg" id="en-lier"></div><div style="position:relative;height:200px"><canvas id="en-er"></canvas></div></div>
+  </div>
   <div class="card"><div class="ct">Document completion funnel — period total (Doc Ads only)</div><div style="position:relative;height:110px"><canvas id="en-doc"></canvas></div></div>
   <div class="sec-div">Ad set period breakdown</div>
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span class="fl">Metric</span><select class="metric-sel" id="en-metric" onchange="renderEngagement()"><option value="engagements"${curMetric==='engagements'?' selected':''}>Engagements</option><option value="engagementRate"${curMetric==='engagementRate'?' selected':''}>Eng. rate %</option><option value="spend"${curMetric==='spend'?' selected':''}>Spend (€)</option><option value="cpm"${curMetric==='cpm'?' selected':''}>CPM (€)</option><option value="ctr"${curMetric==='ctr'?' selected':''}>CTR %</option></select></div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+    <span class="fl">Metric</span>
+    <select class="metric-sel" id="en-metric" onchange="renderEngagement()">
+      <option value="engagements"${curMetric==='engagements'?' selected':''}>Engagements</option>
+      <option value="engagementRate"${curMetric==='engagementRate'?' selected':''}>Eng. rate %</option>
+      <option value="spend"${curMetric==='spend'?' selected':''}>Spend (€)</option>
+      <option value="cpm"${curMetric==='cpm'?' selected':''}>CPM (€)</option>
+      <option value="ctr"${curMetric==='ctr'?' selected':''}>CTR %</option>
+    </select>
+  </div>
   <table><thead><tr><th style="width:34%">Ad set</th><th>Market</th><th>Owner</th><th style="text-align:right">This period</th><th style="text-align:right">Prev period</th><th style="text-align:right">Δ</th></tr></thead><tbody id="en-tbl"></tbody></table>`;
+
   document.getElementById('en-li').innerHTML=adsets.map((a,i)=>`<span class="li"><span class="ld" style="background:${AC[i]}"></span>${shortAS(a).slice(0,26)}</span>`).join('');
   mkChart('en-eng',{type:'bar',data:{labels:wL,datasets:adsets.map((a,i)=>({label:shortAS(a),data:weeks.map(w=>Math.round(sumWk(data.filter(r=>r.adSet===a),w,'engagements'))),backgroundColor:AC[i],borderRadius:2,borderSkipped:false}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10}}}}}});
   document.getElementById('en-lier').innerHTML=adsets.map((a,i)=>`<span class="li"><span class="ld" style="background:${AC[i]}"></span>${shortAS(a).slice(0,26)}</span>`).join('');
   mkChart('en-er',{type:'line',data:{labels:wL,datasets:adsets.map((a,i)=>({label:shortAS(a),data:weeks.map(w=>{const rows=data.filter(r=>r.adSet===a&&getWeekMon(r.date)===w);return rows.length?parseFloat((rows.reduce((s,r)=>s+r.engagementRate,0)/rows.length).toFixed(2)):null;}),borderColor:AC[i],backgroundColor:'transparent',borderWidth:2,pointRadius:3,tension:.3,spanGaps:true}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:10},callback:v=>v+'%'}},x:{ticks:{font:{size:10}}}}}});
   const docAds=data.filter(r=>r.adSet.toLowerCase().includes('document'));
   mkChart('en-doc',{type:'bar',data:{labels:['25%','50%','75%','100% (full read)'],datasets:[{data:[sumAll(docAds,'doc25'),sumAll(docAds,'doc50'),sumAll(docAds,'doc75'),sumAll(docAds,'doc100')],backgroundColor:['#378ADD','#185FA5','#0C447C','#042C53'],borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
-  const sm=curMetric,isAvg=['engagementRate','cpm','ctr'].includes(sm),inv=['cpm'].includes(sm);
+
+  const sm=curMetric;const isAvg=['engagementRate','cpm','ctr'].includes(sm);const inv=['cpm'].includes(sm);
   function gv(d){if(!d.length)return null;return isAvg?d.reduce((s,r)=>s+r[sm],0)/d.length:d.reduce((s,r)=>s+r[sm],0);}
   function fv(v){if(v===null)return'—';if(sm==='spend')return'€'+v.toFixed(0);if(sm==='cpm')return'€'+v.toFixed(2);if(['engagementRate','ctr'].includes(sm))return v.toFixed(2)+'%';return Math.round(v).toLocaleString();}
-  document.getElementById('en-tbl').innerHTML=adsets.map(a=>{const ad=data.filter(r=>r.adSet===a),adP=prevData?prevData.filter(r=>r.adSet===a):null,mkt=ad[0]?.market||'',ow=ad[0]?.owner||'',c=gv(ad),pp=adP&&adP.length?gv(adP):null;return`<tr><td>${shortAS(a)}</td><td>${mktB(mkt)}</td><td>${ownerB(ow)}</td><td style="text-align:right;font-weight:600">${fv(c)}</td><td style="text-align:right;color:#888780">${fv(pp)}</td><td style="text-align:right">${fmtDT(wowD(c,pp),inv)}</td></tr>`;}).join('');
+  document.getElementById('en-tbl').innerHTML=adsets.map((a,idx)=>{
+    const ad=data.filter(r=>r.adSet===a);const adP=prevData?prevData.filter(r=>r.adSet===a):null;
+    const mkt=ad[0]?.market||'';const ow=ad[0]?.owner||'';
+    const c=gv(ad);const pp=adP&&adP.length?gv(adP):null;
+    const key=`en_${idx}`;const isExp=!!expandedRows[key];
+    const hls=[...new Set(ad.map(r=>r.adHeadline||r.adName).filter(Boolean))];const hasAds=hls.length>0;
+    let html=`<tr onclick="toggleExpand('${key}')" style="${hasAds?'cursor:pointer':''}"><td><span class="expand-icon${isExp?' open':''}">${hasAds?'▶':''}</span> ${shortAS(a)}</td><td>${mktB(mkt)}</td><td>${ownerB(ow)}</td><td style="text-align:right;font-weight:600">${fv(c)}</td><td style="text-align:right;color:#888780">${fv(pp)}</td><td style="text-align:right">${fmtDT(wowD(c,pp),inv)}</td></tr>`;
+    if(isExp&&hasAds){hls.forEach(hl=>{const hd=ad.filter(r=>(r.adHeadline||r.adName)===hl);const hp=adP?adP.filter(r=>(r.adHeadline||r.adName)===hl):null;const hc=gv(hd);const hpv=hp&&hp.length?gv(hp):null;const sh=hl.length>55?hl.slice(0,52)+'…':hl;html+=`<tr class="ad-row"><td style="padding-left:28px;color:#5f5e5a;font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${hl.replace(/"/g,'&quot;')}">${sh}</td><td></td><td></td><td style="text-align:right">${fv(hc)}</td><td style="text-align:right;color:#aaa">${fv(hpv)}</td><td style="text-align:right">${fmtDT(wowD(hc,hpv),inv)}</td></tr>`;});}
+    return html;
+  }).join('');
 }
 
 // ─── LEAD GEN ─────────────────────────────────────────────────────────────────
 function renderLeadGen(){
-  const data=scopeData('leadgen'),prevData=getPrevData('leadgen');
-  const weeks=getWeeks(data),wL=weeks.map(w=>w.slice(5));
-  const adsets=[...new Set(data.map(r=>r.adSet))],AC=adsets.map((_,i)=>AD_PALETTE[i%AD_PALETTE.length]);
+  const data=scopeData('leadgen');
+  const prevData=getPrevData('leadgen');
+  const weeks=getWeeks(data);
+  const wL=weeks.map(w=>w.slice(5));
+  const adsets=[...new Set(data.map(r=>r.adSet))];
+  const AC=adsets.map((_,i)=>AD_PALETTE[i%AD_PALETTE.length]);
+
   const spend=sumAll(data,'spend'),spendP=prevData?sumAll(prevData,'spend'):null;
   const leads=sumAll(data,'leads'),leadsP=prevData?sumAll(prevData,'leads'):null;
   const cpl=avgAll(data,'cpl'),cplP=prevData?avgAll(prevData,'cpl'):null;
   const lfcr=avgAll(data,'leadFormCR'),lfcrP=prevData?avgAll(prevData,'leadFormCR'):null;
+
   const curMetric=document.getElementById('lg-metric')?.value||'leads';
+
   document.getElementById('tab-leadgen').innerHTML=`
-  <div class="kpi-grid">${kpiCard('Spend',spend,wowD(spend,spendP),'eur')}${kpiCard('Leads',leads,wowD(leads,leadsP))}${kpiCard('Avg CPL',cpl,wowD(cpl,cplP),'eur1',true)}${kpiCard('Form completion rate',lfcr,wowD(lfcr,lfcrP),'pct')}</div>
-  <div class="two-col"><div class="card no-mb"><div class="ct">Weekly leads by ad set</div><div class="leg" id="lg-li"></div><div style="position:relative;height:190px"><canvas id="lg-leads"></canvas></div></div><div class="card no-mb"><div class="ct">CPL trend (€)</div><div class="leg" id="lg-licpl"></div><div style="position:relative;height:190px"><canvas id="lg-cpl"></canvas></div></div></div>
+  <div class="kpi-grid">
+    ${kpiCard('Spend',spend,wowD(spend,spendP),'eur')}
+    ${kpiCard('Leads',leads,wowD(leads,leadsP))}
+    ${kpiCard('Avg CPL',cpl,wowD(cpl,cplP),'eur1',true)}
+    ${kpiCard('Form completion rate',lfcr,wowD(lfcr,lfcrP),'pct')}
+  </div>
+  <div class="two-col">
+    <div class="card no-mb"><div class="ct">Weekly leads by ad set</div><div class="leg" id="lg-li"></div><div style="position:relative;height:190px"><canvas id="lg-leads"></canvas></div></div>
+    <div class="card no-mb"><div class="ct">CPL trend (€)</div><div class="leg" id="lg-licpl"></div><div style="position:relative;height:190px"><canvas id="lg-cpl"></canvas></div></div>
+  </div>
   <div class="card"><div class="ct">Weekly spend vs leads volume</div><div style="position:relative;height:150px"><canvas id="lg-sv"></canvas></div></div>
   <div class="sec-div">Ad set period breakdown</div>
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span class="fl">Metric</span><select class="metric-sel" id="lg-metric" onchange="renderLeadGen()"><option value="leads"${curMetric==='leads'?' selected':''}>Leads</option><option value="cpl"${curMetric==='cpl'?' selected':''}>CPL (€)</option><option value="leadFormCR"${curMetric==='leadFormCR'?' selected':''}>Form CR %</option><option value="spend"${curMetric==='spend'?' selected':''}>Spend (€)</option></select></div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+    <span class="fl">Metric</span>
+    <select class="metric-sel" id="lg-metric" onchange="renderLeadGen()">
+      <option value="leads"${curMetric==='leads'?' selected':''}>Leads</option>
+      <option value="cpl"${curMetric==='cpl'?' selected':''}>CPL (€)</option>
+      <option value="leadFormCR"${curMetric==='leadFormCR'?' selected':''}>Form CR %</option>
+      <option value="spend"${curMetric==='spend'?' selected':''}>Spend (€)</option>
+    </select>
+  </div>
   <table><thead><tr><th style="width:36%">Ad set</th><th>Market</th><th>Owner</th><th style="text-align:right">This period</th><th style="text-align:right">Prev period</th><th style="text-align:right">Δ</th></tr></thead><tbody id="lg-tbl"></tbody></table>`;
+
   document.getElementById('lg-li').innerHTML=adsets.map((a,i)=>`<span class="li"><span class="ld" style="background:${AC[i]}"></span>${shortAS(a).slice(0,30)}</span>`).join('');
   mkChart('lg-leads',{type:'bar',data:{labels:wL,datasets:adsets.map((a,i)=>({label:shortAS(a),data:weeks.map(w=>Math.round(sumWk(data.filter(r=>r.adSet===a),w,'leads'))),backgroundColor:AC[i],borderRadius:2,borderSkipped:false}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10}}}}}});
   document.getElementById('lg-licpl').innerHTML=adsets.map((a,i)=>`<span class="li"><span class="ld" style="background:${AC[i]}"></span>${shortAS(a).slice(0,30)}</span>`).join('');
   mkChart('lg-cpl',{type:'line',data:{labels:wL,datasets:adsets.map((a,i)=>({label:shortAS(a),data:weeks.map(w=>{const rows=data.filter(r=>r.adSet===a&&getWeekMon(r.date)===w);const v=rows.length?rows.reduce((s,r)=>s+r.cpl,0)/rows.length:null;return v&&v>0?parseFloat(v.toFixed(2)):null;}),borderColor:AC[i],backgroundColor:'transparent',borderWidth:2,pointRadius:3,tension:.3,spanGaps:true}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:10},callback:v=>'€'+v}},x:{ticks:{font:{size:10}}}}}});
   mkChart('lg-sv',{type:'bar',data:{labels:wL,datasets:[{label:'Spend (€)',data:weeks.map(w=>parseFloat(sumWk(data,w,'spend').toFixed(1))),backgroundColor:'#1D9E75',yAxisID:'y',borderRadius:2,borderSkipped:false},{label:'Leads',data:weeks.map(w=>Math.round(sumWk(data,w,'leads'))),backgroundColor:'#9FE1CB',yAxisID:'y2',borderRadius:2,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{type:'linear',position:'left',ticks:{font:{size:10},callback:v=>'€'+v}},y2:{type:'linear',position:'right',ticks:{font:{size:10}},grid:{drawOnChartArea:false}},x:{ticks:{font:{size:10}}}}}});
-  const sm=curMetric,isAvg=['cpl','leadFormCR'].includes(sm),inv=['cpl'].includes(sm);
+
+  const sm=curMetric;const isAvg=['cpl','leadFormCR'].includes(sm);const inv=['cpl'].includes(sm);
   function gv(d){if(!d.length)return null;return isAvg?d.reduce((s,r)=>s+r[sm],0)/d.length:d.reduce((s,r)=>s+r[sm],0);}
   function fv(v){if(v===null)return'—';if(['cpl','spend'].includes(sm))return'€'+v.toFixed(1);if(sm==='leadFormCR')return v.toFixed(2)+'%';return Math.round(v).toLocaleString();}
-  document.getElementById('lg-tbl').innerHTML=adsets.map(a=>{const ad=data.filter(r=>r.adSet===a),adP=prevData?prevData.filter(r=>r.adSet===a):null,mkt=ad[0]?.market||'',ow=ad[0]?.owner||'',c=gv(ad),pp=adP&&adP.length?gv(adP):null;return`<tr><td>${shortAS(a)}</td><td>${mktB(mkt)}</td><td>${ownerB(ow)}</td><td style="text-align:right;font-weight:600">${fv(c)}</td><td style="text-align:right;color:#888780">${fv(pp)}</td><td style="text-align:right">${fmtDT(wowD(c,pp),inv)}</td></tr>`;}).join('');
+  document.getElementById('lg-tbl').innerHTML=adsets.map((a,idx)=>{
+    const ad=data.filter(r=>r.adSet===a);const adP=prevData?prevData.filter(r=>r.adSet===a):null;
+    const mkt=ad[0]?.market||'';const ow=ad[0]?.owner||'';
+    const c=gv(ad);const pp=adP&&adP.length?gv(adP):null;
+    const key=`lg_${idx}`;const isExp=!!expandedRows[key];
+    const hls=[...new Set(ad.map(r=>r.adHeadline||r.adName).filter(Boolean))];const hasAds=hls.length>0;
+    let html=`<tr onclick="toggleExpand('${key}')" style="${hasAds?'cursor:pointer':''}"><td><span class="expand-icon${isExp?' open':''}">${hasAds?'▶':''}</span> ${shortAS(a)}</td><td>${mktB(mkt)}</td><td>${ownerB(ow)}</td><td style="text-align:right;font-weight:600">${fv(c)}</td><td style="text-align:right;color:#888780">${fv(pp)}</td><td style="text-align:right">${fmtDT(wowD(c,pp),inv)}</td></tr>`;
+    if(isExp&&hasAds){hls.forEach(hl=>{const hd=ad.filter(r=>(r.adHeadline||r.adName)===hl);const hp=adP?adP.filter(r=>(r.adHeadline||r.adName)===hl):null;const hc=gv(hd);const hpv=hp&&hp.length?gv(hp):null;const sh=hl.length>55?hl.slice(0,52)+'…':hl;html+=`<tr class="ad-row"><td style="padding-left:28px;color:#5f5e5a;font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${hl.replace(/"/g,'&quot;')}">${sh}</td><td></td><td></td><td style="text-align:right">${fv(hc)}</td><td style="text-align:right;color:#aaa">${fv(hpv)}</td><td style="text-align:right">${fmtDT(wowD(hc,hpv),inv)}</td></tr>`;});}
+    return html;
+  }).join('');
 }
 
 // ─── TRAFFIC ──────────────────────────────────────────────────────────────────
 function renderTraffic(){
-  const data=scopeData('traffic'),prevData=getPrevData('traffic');
-  const weeks=getWeeks(data),wL=weeks.map(w=>w.slice(5));
+  const data=scopeData('traffic');
+  const prevData=getPrevData('traffic');
+  const weeks=getWeeks(data);
+  const wL=weeks.map(w=>w.slice(5));
   const adsets=[...new Set(data.map(r=>r.adSet))];
+
   const spend=sumAll(data,'spend'),spendP=prevData?sumAll(prevData,'spend'):null;
   const clp=sumAll(data,'clicksToLP'),clpP=prevData?sumAll(prevData,'clicksToLP'):null;
   const cpc=avgAll(data,'cpc'),cpcP=prevData?avgAll(prevData,'cpc'):null;
   const ctr=avgAll(data,'ctr'),ctrP=prevData?avgAll(prevData,'ctr'):null;
+
   document.getElementById('tab-traffic').innerHTML=`
-  <div class="kpi-grid">${kpiCard('Spend',spend,wowD(spend,spendP),'eur')}${kpiCard('Clicks to LP',clp,wowD(clp,clpP))}${kpiCard('Avg CPC',cpc,wowD(cpc,cpcP),'eur1',true)}${kpiCard('CTR %',ctr,wowD(ctr,ctrP),'pct')}</div>
-  <div class="two-col"><div class="card no-mb"><div class="ct">Weekly clicks to landing page</div><div style="position:relative;height:190px"><canvas id="tr-clp"></canvas></div></div><div class="card no-mb"><div class="ct">CPC trend (€)</div><div style="position:relative;height:190px"><canvas id="tr-cpc"></canvas></div></div></div>
+  <div class="kpi-grid">
+    ${kpiCard('Spend',spend,wowD(spend,spendP),'eur')}
+    ${kpiCard('Clicks to LP',clp,wowD(clp,clpP))}
+    ${kpiCard('Avg CPC',cpc,wowD(cpc,cpcP),'eur1',true)}
+    ${kpiCard('CTR %',ctr,wowD(ctr,ctrP),'pct')}
+  </div>
+  <div class="two-col">
+    <div class="card no-mb"><div class="ct">Weekly clicks to landing page</div><div style="position:relative;height:190px"><canvas id="tr-clp"></canvas></div></div>
+    <div class="card no-mb"><div class="ct">CPC trend (€)</div><div style="position:relative;height:190px"><canvas id="tr-cpc"></canvas></div></div>
+  </div>
   <div class="card"><div class="ct">Document completion funnel — period total</div><div style="position:relative;height:100px"><canvas id="tr-doc"></canvas></div></div>
   <div class="sec-div">Ad set period breakdown</div>
   <table><thead><tr><th style="width:40%">Ad set</th><th>Market</th><th>Owner</th><th style="text-align:right">Clicks LP</th><th style="text-align:right">Δ</th><th style="text-align:right">Spend</th><th style="text-align:right">Δ</th></tr></thead><tbody id="tr-tbl"></tbody></table>`;
+
   mkChart('tr-clp',{type:'bar',data:{labels:wL,datasets:[{data:weeks.map(w=>Math.round(sumWk(data,w,'clicksToLP'))),backgroundColor:'#EF9F27',borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
   mkChart('tr-cpc',{type:'line',data:{labels:wL,datasets:[{data:weeks.map(w=>{const rows=data.filter(r=>getWeekMon(r.date)===w);return rows.length?parseFloat((rows.reduce((s,r)=>s+r.cpc,0)/rows.length).toFixed(2)):null;}),borderColor:'#BA7517',backgroundColor:'transparent',borderWidth:2,pointRadius:3,tension:.3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:10},callback:v=>'€'+v}},x:{ticks:{font:{size:10}}}}}});
   mkChart('tr-doc',{type:'bar',data:{labels:['25%','50%','75%','100%'],datasets:[{data:[sumAll(data,'doc25'),sumAll(data,'doc50'),sumAll(data,'doc75'),sumAll(data,'doc100')],backgroundColor:['#EF9F27','#BA7517','#854F0B','#633806'],borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
-  document.getElementById('tr-tbl').innerHTML=adsets.map(a=>{const ad=data.filter(r=>r.adSet===a),adP=prevData?prevData.filter(r=>r.adSet===a):null,mkt=ad[0]?.market||'',ow=ad[0]?.owner||'',cl=sumAll(ad,'clicksToLP'),clP=adP?sumAll(adP,'clicksToLP'):null,sp=sumAll(ad,'spend'),spp=adP?sumAll(adP,'spend'):null;return`<tr><td>${shortAS(a)}</td><td>${mktB(mkt)}</td><td>${ownerB(ow)}</td><td style="text-align:right;font-weight:600">${Math.round(cl).toLocaleString()}</td><td style="text-align:right">${fmtDT(wowD(cl,clP))}</td><td style="text-align:right">€${Math.round(sp)}</td><td style="text-align:right">${fmtDT(wowD(sp,spp))}</td></tr>`;}).join('');
+
+  document.getElementById('tr-tbl').innerHTML=adsets.map((a,idx)=>{
+    const ad=data.filter(r=>r.adSet===a);const adP=prevData?prevData.filter(r=>r.adSet===a):null;
+    const mkt=ad[0]?.market||'';const ow=ad[0]?.owner||'';
+    const cl=sumAll(ad,'clicksToLP'),clP=adP?sumAll(adP,'clicksToLP'):null;
+    const sp=sumAll(ad,'spend'),spp=adP?sumAll(adP,'spend'):null;
+    const key=`tr_${idx}`;const isExp=!!expandedRows[key];
+    const hls=[...new Set(ad.map(r=>r.adHeadline||r.adName).filter(Boolean))];const hasAds=hls.length>0;
+    let html=`<tr onclick="toggleExpand('${key}')" style="${hasAds?'cursor:pointer':''}"><td><span class="expand-icon${isExp?' open':''}">${hasAds?'▶':''}</span> ${shortAS(a)}</td><td>${mktB(mkt)}</td><td>${ownerB(ow)}</td><td style="text-align:right;font-weight:600">${Math.round(cl).toLocaleString()}</td><td style="text-align:right">${fmtDT(wowD(cl,clP))}</td><td style="text-align:right">€${Math.round(sp)}</td><td style="text-align:right">${fmtDT(wowD(sp,spp))}</td></tr>`;
+    if(isExp&&hasAds){hls.forEach(hl=>{const hd=ad.filter(r=>(r.adHeadline||r.adName)===hl);const hp=adP?adP.filter(r=>(r.adHeadline||r.adName)===hl):null;const hcl=sumAll(hd,'clicksToLP'),hclP=hp?sumAll(hp,'clicksToLP'):null;const hsp=sumAll(hd,'spend'),hspp=hp?sumAll(hp,'spend'):null;const sh=hl.length>55?hl.slice(0,52)+'…':hl;html+=`<tr class="ad-row"><td style="padding-left:28px;color:#5f5e5a;font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${hl.replace(/"/g,'&quot;')}">${sh}</td><td></td><td></td><td style="text-align:right">${Math.round(hcl).toLocaleString()}</td><td style="text-align:right">${fmtDT(wowD(hcl,hclP))}</td><td style="text-align:right">€${Math.round(hsp)}</td><td style="text-align:right">${fmtDT(wowD(hsp,hspp))}</td></tr>`;});}
+    return html;
+  }).join('');
 }
 
 // ─── Routing ──────────────────────────────────────────────────────────────────
-function switchTab(tab,el){activeTab=tab;document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+tab).classList.add('active');renderCurrentTab();}
-function setFilter(type,val,el){filters[type]=val;document.querySelectorAll(`.pill[onclick*="'${type}'"]`).forEach(p=>p.classList.remove('active'));el.classList.add('active');renderCurrentTab();}
+function toggleExpand(key){
+  expandedRows[key]=!expandedRows[key];
+  renderCurrentTab();
+}
+
+function switchTab(tab,el){
+  activeTab=tab;
+  expandedRows={};
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  renderCurrentTab();
+}
+
+function setFilter(type,val,el){
+  filters[type]=val;
+  document.querySelectorAll(`.pill[onclick*="'${type}'"]`).forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  renderCurrentTab();
+}
+
 function setPeriod(preset,el){
   periodState.preset=preset;
   document.querySelectorAll('[id^="period-"]').forEach(p=>p.classList.remove('active'));
   el.classList.add('active');
-  const cr=document.getElementById('custom-date-row');
-  cr.style.display=preset==='custom'?'flex':'none';
-  if(preset==='custom'&&!periodState.customStart&&allData.length){
-    const sorted=allData.map(r=>r.date).sort();
-    const s=document.getElementById('date-start'),e=document.getElementById('date-end');
-    if(!s.value)s.value=sorted[0];
-    if(!e.value)e.value=sorted[sorted.length-1];
-    periodState.customStart=s.value;periodState.customEnd=e.value;
+  const customRow=document.getElementById('custom-date-row');
+  customRow.style.display=preset==='custom'?'flex':'none';
+  if(preset==='custom'){
+    // Pre-fill dates with data range if not set
+    if(!periodState.customStart&&allData.length){
+      const sorted=allData.map(r=>r.date).sort();
+      const startEl=document.getElementById('date-start');
+      const endEl=document.getElementById('date-end');
+      if(!startEl.value)startEl.value=sorted[0];
+      if(!endEl.value)endEl.value=sorted[sorted.length-1];
+      periodState.customStart=startEl.value;
+      periodState.customEnd=endEl.value;
+    }
   }
   renderCurrentTab();
 }
-function updateCustomDates(){periodState.customStart=document.getElementById('date-start').value;periodState.customEnd=document.getElementById('date-end').value;if(periodState.customStart&&periodState.customEnd)renderCurrentTab();}
-function renderCurrentTab(){if(!allData.length)return;if(activeTab==='overview')renderOverview();else if(activeTab==='awareness')renderAwareness();else if(activeTab==='engagement')renderEngagement();else if(activeTab==='leadgen')renderLeadGen();else if(activeTab==='traffic')renderTraffic();}
-function showDashboard(){document.getElementById('empty-state').style.display='none';document.getElementById('dashboard').style.display='block';}
+
+function updateCustomDates(){
+  periodState.customStart=document.getElementById('date-start').value;
+  periodState.customEnd=document.getElementById('date-end').value;
+  if(periodState.customStart&&periodState.customEnd)renderCurrentTab();
+}
+
+function renderCurrentTab(){
+  if(!allData.length)return;
+  if(activeTab==='overview')renderOverview();
+  else if(activeTab==='awareness')renderAwareness();
+  else if(activeTab==='engagement')renderEngagement();
+  else if(activeTab==='leadgen')renderLeadGen();
+  else if(activeTab==='traffic')renderTraffic();
+}
 
 // ─── CSV Parser ───────────────────────────────────────────────────────────────
+function handleCSV(evt){
+  const file=evt.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const parsed=parseLinkedInCSV(e.target.result);
+      if(parsed.length>0){
+        allData=parsed;
+        saveToStorage(parsed);
+        showUpdatedChip(new Date().toISOString());
+        showDashboard();
+        renderCurrentTab();
+      }else{alert('No data found. Make sure this is a LinkedIn Ad Set Performance export at account level.');}
+    }catch(err){alert('Could not parse CSV: '+err.message);}
+  };
+  reader.readAsText(file,'UTF-16LE');
+}
+
 function parseLinkedInCSV(text){
   const lines=text.split('\n');
   let hdrIdx=-1;
@@ -469,13 +760,19 @@ function parseLinkedInCSV(text){
   const rows=[];
   for(let i=hdrIdx+1;i<lines.length;i++){
     const cols=lines[i].split('\t').map(c=>c.trim().replace(/^"|"$/g,''));
-    if(cols.length<18||!cols[0])continue;
+    if(cols.length<10||!cols[0])continue;
     const toF=s=>{const n=parseFloat(s.replace('%','').replace(',','').replace(/\s/g,''));return isNaN(n)?0:n;};
     const dateRaw=cols[0];let dateIso=dateRaw;
     const m=dateRaw.match(/(\d+)\/(\d+)\/(\d+)/);
     if(m){const yr=m[3].length===2?'20'+m[3]:m[3];dateIso=`${yr}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;}
-    const camName=cols[4]||'',adSet=cols[9]||'';
-    const objRaw=(cols[gi('Campaign Objective Type')]||cols[7]||'').toLowerCase();
+    // Support both old (ad-set level) and new (ad level) export formats
+    const camName=(gi('Campaign Name')>=0?cols[gi('Campaign Name')]:cols[4])||'';
+    const adSet=(gi('Ad Set Name')>=0?cols[gi('Ad Set Name')]:(gi('Ad set Name')>=0?cols[gi('Ad set Name')]:cols[8]))||'';
+    const adName=(gi('Ad Name')>=0?cols[gi('Ad Name')]||'':'');
+    const adHeadline=(gi('Ad Headline')>=0?cols[gi('Ad Headline')]||'':'');
+    // Objective: prefer explicit 'Ad Set Objective', fall back to 'Campaign Objective Type', then positional
+    const objIdx=gi('Ad Set Objective')>=0?gi('Ad Set Objective'):(gi('Campaign Objective Type')>=0?gi('Campaign Objective Type'):-1);
+    const objRaw=(objIdx>=0?cols[objIdx]||'':cols[7]||'').toLowerCase();
     let obj='other';
     if(objRaw.includes('awareness')||objRaw.includes('brand'))obj='awareness';
     else if(objRaw.includes('engagement'))obj='engagement';
@@ -487,7 +784,7 @@ function parseLinkedInCSV(text){
     if(owner==='bulldozer'){if(nameU.includes('NORDIC'))market='nordics';else if(nameU.includes('US'))market='us';}
     else{if(nameU.includes('DACH'))market='dach';else if(nameU.includes('UKI'))market='uki';else if(nameU.includes('US'))market='us';else if(nameU.includes('NORDIC'))market='nordics';}
     const g=col=>{const idx=gi(col);return idx>=0&&idx<cols.length?toF(cols[idx]):0;};
-    rows.push({date:dateIso,campaignName:camName,adSet,objective:obj,owner,market,
+    rows.push({date:dateIso,campaignName:camName,adSet,adName,adHeadline,objective:obj,owner,market,
       spend:g('Total Spent'),impressions:g('Impressions'),clicks:g('Clicks'),
       ctr:g('Click Through Rate'),cpm:g('Average CPM'),cpc:g('Average CPC'),
       engagements:g('Total Engagements'),engagementRate:g('Engagement Rate'),
@@ -504,7 +801,12 @@ function parseLinkedInCSV(text){
   return rows;
 }
 
-// ─── Boot ─────────────────────────────────────────────────────────────────────
+// ─── Init ─────────────────────────────────────────────────────────────────────
+function showDashboard(){
+  document.getElementById('empty-state').style.display='none';
+  document.getElementById('dashboard').style.display='block';
+}
+
 loadData();
 </script>
 </body>
