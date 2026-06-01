@@ -750,8 +750,19 @@ function handleCSV(evt){
   reader.readAsText(file,'UTF-16LE');
 }
 
+function splitCSVRows(text){
+  const rows=[];let row='';let inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(c==='"'){inQ=!inQ;row+=c;}
+    else if((c==='\n'||c==='\r')&&!inQ){if(c==='\r'&&text[i+1]==='\n')i++;rows.push(row);row='';}
+    else{row+=c;}
+  }
+  if(row)rows.push(row);
+  return rows;
+}
 function parseLinkedInCSV(text){
-  const lines=text.split('\n');
+  const lines=splitCSVRows(text);
   let hdrIdx=-1;
   for(let i=0;i<Math.min(lines.length,10);i++){if(lines[i].includes('Start Date')&&lines[i].includes('Campaign Name')){hdrIdx=i;break;}}
   if(hdrIdx<0)throw new Error('Header row not found');
