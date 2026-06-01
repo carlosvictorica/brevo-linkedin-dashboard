@@ -740,7 +740,7 @@ function handleCSV(evt){
       const parsed=parseLinkedInCSV(e.target.result);
       if(parsed.length>0){
         allData=parsed;
-        saveToStorage(parsed);
+        // no localStorage in hosted version
         showUpdatedChip(new Date().toISOString());
         showDashboard();
         renderCurrentTab();
